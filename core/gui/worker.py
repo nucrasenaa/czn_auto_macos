@@ -35,6 +35,7 @@ class AutomationWorker(QThread):
     """运行零式系统 / 赛季图刷取的状态机主循环。"""
 
     stats_changed = Signal(dict)
+    notify = Signal(str)
 
     def __init__(self, cfg_mgr: ConfigManager, parent=None):
         super().__init__(parent)
@@ -598,17 +599,48 @@ class AutomationWorker(QThread):
         ocr_cfg = cfg.get("ocr", {})
         if ocr_state.ocr is None:
             from core.ocr import OcrReader
-            lang = "zh-hk" if cfg.get("template_profile") == "templates_global" else "zh-cn"
-            ocr_state.ocr = OcrReader(lang, ocr_cfg.get("backend", "windows"))
+            ocr_state.ocr = OcrReader("zh-cn", ocr_cfg.get("backend", "windows"))
         ocr = ocr_state.ocr
 
         is_global = cfg.get("template_profile") == "templates_global"
-        kw_default = "退出2x" if is_global else "退出2选"
+        kw_default = "移除2张所选卡牌"
         entry_default = ["M"] if is_global else [""]
         exit_default = ["ESC", "退出", "_J"] if is_global else ["ESC", "返回", "关闭"]
 
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
+            import zhconv
+        def _convert(text):
+            if isinstance(text, str):
+                return zhconv.convert(text, "zh-cn")
+            return text
+        def _convert_list(lst):
+            return [_convert(s) for s in lst]
+
+        def _scan(frame):
+            """OCR扫描并统一转简体（国际服繁体→简体）"""
+            texts = ocr.scan(frame)
+            if is_global:
+                texts = [(zhconv.convert(t, "zh-cn"), x, y, w, h) for t, x, y, w, h in texts]
+            return texts
+
+        def _find_text(frame, kw, region=None, consecutive=False):
+            """find_text 封装：先原样查，没命中则转简体后再查"""
+            pos = ocr.find_text(frame, kw, region, consecutive)
+            if pos or not is_global:
+                return pos
+            texts = _scan(frame)
+            for t, bx, by, bw, bh in texts:
+                if kw in t:
+                    return (bx + bw // 2, by + bh // 2)
+            return None
+
+        kw = _convert(ocr_cfg.get("keyword", kw_default))
+        entry_kws = _convert_list(ocr_cfg.get("entry_keywords", entry_default))
+        exit_kws = _convert_list(ocr_cfg.get("exit_keywords", exit_default))
+
         if ocr_state.exiting:
-            exit_kws = ocr_cfg.get("exit_keywords", exit_default)
             exit_offsets = ocr_cfg.get("exit_keyword_offsets", [])
             if ocr_state.exit_idx < len(exit_kws):
                 kw = exit_kws[ocr_state.exit_idx]
@@ -618,47 +650,111 @@ class AutomationWorker(QThread):
                     target_state = GameState.RETREAT
                 elif ocr_state.exit_idx >= 2:
                     target_state = GameState.SKIP_CONFIRM
-                if target_state is not None and state == target_state:
+                if target_state is not None and (state == target_state or
+                   (target_state == GameState.RETREAT and state == GameState.RETREAT1) or
+                   (target_state == GameState.SKIP_CONFIRM and state == GameState.CONFIRM_ORANGE)):
+                    ocr_state.exit_fail = 0
                     cx, cy = detector.last_pos[0] + offset[0], detector.last_pos[1] + offset[1]
-                    logging.info(f"模板匹配 {kw} ({cx},{cy}) conf={detector.last_conf:.3f}")
+                    logging.info(f"匹配 {kw} ({cx},{cy})")
                     sim.click_at(cx, cy, res[0], res[1])
                     ocr_state.exit_idx += 1
                 else:
-                    pos = ocr.find_text(frame, kw, None, consecutive=True)
+                    # exit_idx=0: 像素ESC优先于OCR
+                    if ocr_state.exit_idx == 0:
+                        esc_rule = next((r for r in detector.pixel_checker.rules if r.state == GameState.ESC), None)
+                        if esc_rule:
+                            hit, esc_pos = detector.pixel_checker.match(frame, esc_rule)
+                            if hit:
+                                ocr_state.exit_fail = 0
+                                logging.info(f"像素ESC，点击 ({esc_pos[0]},{esc_pos[1]})")
+                                sim.click_at(esc_pos[0], esc_pos[1], res[0], res[1])
+                                ocr_state.exit_idx += 1
+                                time.sleep(sr_delay)
+                                return True
+                    pos = _find_text(frame, kw, None, True)
                     if pos:
+                        ocr_state.exit_fail = 0
                         cx, cy = pos[0] + offset[0], pos[1] + offset[1]
                         logging.info(f"找到 {kw} ({cx},{cy})")
                         sim.click_at(cx, cy, res[0], res[1])
                         ocr_state.exit_idx += 1
-                    elif state == GameState.RETREAT:
+                    elif state != GameState.UNKNOWN and state not in (GameState.ESC, GameState.RETREAT1, GameState.CONFIRM_ORANGE):
+                        ocr_state.exit_fail = 0
                         cx, cy = detector.last_pos[0] + offset[0], detector.last_pos[1] + offset[1]
-                        logging.info(f"模板已到 {kw} ({cx},{cy})")
+                        logging.info(f"画面已到 {state.value}，点击 ({cx},{cy})")
                         sim.click_at(cx, cy, res[0], res[1])
                         ocr_state.exit_idx += 1
                     else:
-                        logging.info(f"等待 {kw}")
+                        ocr_state.exit_fail += 1
+                        if ocr_state.exit_fail >= 5:
+                            logging.info(f"退出{kw} 连续{ocr_state.exit_fail}次未匹配，强制跳过")
+                            ocr_state.exit_idx += 1
+                            ocr_state.exit_fail = 0
+                        else:
+                            logging.info(f"等待 {kw} ({ocr_state.exit_fail}/5)")
                 time.sleep(sr_delay)
             else:
+                # 退出关键词用完后，若还在退出相关画面先继续点
+                if state in (GameState.CONFIRM_ORANGE, GameState.CONFIRM_PURPLE,
+                             GameState.CONFIRM_OPTION, GameState.CONFIRM,
+                             GameState.RETREAT1, GameState.RETREAT):
+                    cx, cy = detector.last_pos[0], detector.last_pos[1]
+                    logging.info(f"退出阶段残留{state.value}，点击 ({cx},{cy})")
+                    sim.click_at(cx, cy, res[0], res[1])
+                    time.sleep(1.0)
+                    return True
                 ocr_state.reset_round()
                 logging.info("退出完成准备下一轮")
             return True
 
-        entry_kws = ocr_cfg.get("entry_keywords", entry_default)
         if ocr_state.entry_idx < len(entry_kws):
             kw = entry_kws[ocr_state.entry_idx]
-            pos = ocr.find_text(frame, kw, None, consecutive=True)
-            if pos:
-                logging.info(f"入口找到 {kw} ({ocr_state.entry_idx + 1}/{len(entry_kws)})")
-                sim.click_at(pos[0], pos[1], res[0], res[1])
+            # 像素优先
+            pstates = (GameState.IN1, GameState.IN2)
+            pixel_hit = False
+            for ps in pstates:
+                rule = next((r for r in detector.pixel_checker.rules if r.state == ps), None)
+                if rule:
+                    hit, ppos = detector.pixel_checker.match(frame, rule)
+                    if hit:
+                        ocr_state.entry_fail = 0
+                        logging.info(f"入口像素 {ps.value} ({ocr_state.entry_idx + 1}/{len(entry_kws)})")
+                        sim.click_at(ppos[0], ppos[1], res[0], res[1])
+                        ocr_state.entry_idx += 1
+                        time.sleep(5.0)
+                        pixel_hit = True
+                        break
+            if pixel_hit:
+                time.sleep(sr_delay)
+                return True
+            if state in (GameState.TEAM_ENTER, GameState.MAIN_MENU, GameState.CODEX_SELECT,
+                           GameState.ZERO_SYSTEM_ENTRY, GameState.CHAOS_CENTER,
+                           GameState.BUFF_SELECT):
+                ocr_state.entry_fail = 0
+                logging.info(f"模板已到 {state.value}，直接点击")
+                sim.click_at(detector.last_pos[0], detector.last_pos[1], res[0], res[1])
                 ocr_state.entry_idx += 1
                 time.sleep(5.0)
             else:
-                logging.info(f"入口等待 {kw}")
+                pos = _find_text(frame, kw, None, True)
+                if pos:
+                    ocr_state.entry_fail = 0
+                    logging.info(f"入口找到 {kw} ({ocr_state.entry_idx + 1}/{len(entry_kws)})")
+                    sim.click_at(pos[0], pos[1], res[0], res[1])
+                    ocr_state.entry_idx += 1
+                    time.sleep(5.0)
+                else:
+                    ocr_state.entry_fail += 1
+                    if ocr_state.entry_fail >= 5:
+                        logging.info(f"入口{kw} 连续{ocr_state.entry_fail}次未匹配，强制跳过")
+                        ocr_state.entry_idx += 1
+                        ocr_state.entry_fail = 0
+                    else:
+                        logging.info(f"入口等待 {kw} ({ocr_state.entry_fail}/5)")
             time.sleep(sr_delay)
             return True
 
-        kw = ocr_cfg.get("keyword", kw_default)
-        all_texts = ocr.scan(frame)
+        all_texts = _scan(frame)
         pos = None
         chars = list(kw)
         sorted_w = sorted(all_texts, key=lambda t: (t[2], t[1]))
@@ -686,6 +782,10 @@ class AutomationWorker(QThread):
                 if pos:
                     logging.info(f"找到关键词: {kw} (OCR: {all_text[:120]!r}) 坐标 ({pos[0]},{pos[1]})")
                     sim.click_at(pos[0], pos[1], res[0], res[1])
+                    time.sleep(0.5)
+                    sim.click_at(pos[0], pos[1], res[0], res[1])
+                    self.notify.emit(kw)
+                    self.msleep(500)
                     self.request_stop()
                     time.sleep(sr_delay)
                     return True
@@ -697,6 +797,10 @@ class AutomationWorker(QThread):
         if pos:
             logging.info(f"找到目标Buff: {kw}")
             sim.click_at(pos[0], pos[1], res[0], res[1])
+            time.sleep(0.5)
+            sim.click_at(pos[0], pos[1], res[0], res[1])
+            self.notify.emit(kw)
+            self.msleep(500)
             self.request_stop()
         else:
             ocr_state.buff_miss += 1
@@ -720,9 +824,13 @@ class _OcrState:
         self.entry_idx = 0
         self.exit_idx = 0
         self.buff_miss = 0
+        self.entry_fail = 0
+        self.exit_fail = 0
 
     def reset_round(self):
         self.exiting = False
         self.entry_idx = 0
         self.exit_idx = 0
         self.buff_miss = 0
+        self.entry_fail = 0
+        self.exit_fail = 0

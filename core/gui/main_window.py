@@ -85,6 +85,7 @@ class MainWindow(FluentWindow):
                             duration=4000, position=InfoBarPosition.TOP, parent=self)
         self.worker = AutomationWorker(self.cfg)
         self.worker.stats_changed.connect(self.home.set_stats)
+        self.worker.notify.connect(self._on_notify)
         self.worker.finished.connect(self._on_worker_finished)
         self.home.set_stats({})
         self.home.set_running_ui(True, False)
@@ -107,6 +108,11 @@ class MainWindow(FluentWindow):
     def _on_worker_finished(self):
         self.home.stop_timer()
         self.home.set_running_ui(False, False)
+
+    def _on_notify(self, msg: str):
+        logging.info(f"通知: 找到目标Buff - {msg}")
+        InfoBar.success("找到目标Buff", msg, duration=10000,
+                        position=InfoBarPosition.BOTTOM_RIGHT, parent=self)
 
     def _on_settings_saved(self):
         self.home.refresh_quick()

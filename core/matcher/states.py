@@ -77,4 +77,7 @@ class GameState(Enum):
     DELETE_SAVE3 = "delete3"   # 删除存档 右
     TUI1 = "tui1"
     TUI2 = "tui2"
+    IN1 = "in1"
+    IN2 = "in2"
+    ESC = "esc"
     UNKNOWN = "unknown"
