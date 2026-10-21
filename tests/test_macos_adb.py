@@ -1,6 +1,7 @@
 import os
 import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import cv2
@@ -9,10 +10,28 @@ import numpy as np
 from core.adb import client
 from core.input import create_backend
 from core.input.simulator import InputSimulator
+from core.matcher import StateDetector, TemplateMatcher, load_pixel_checks
+from core.matcher.states import GameState
 from core.screencap import CaptureMethod, ScreenCapturer
 
 
 class MacOSAdbPortTests(unittest.TestCase):
+    def test_global_profile_detects_combat_auto_off_rule(self):
+        frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        points = {
+            (0.8792, 0.0519): (255, 255, 255),
+            (0.0260, 0.0417): (105, 218, 98),
+            (0.0318, 0.6389): (255, 255, 255),
+            (0.9573, 0.5889): (51, 51, 51),
+        }
+        for (rx, ry), rgb in points.items():
+            x, y = round(rx * frame.shape[1]), round(ry * frame.shape[0])
+            frame[y, x] = rgb[::-1]  # RGB rule values -> BGR OpenCV frame
+
+        matcher = TemplateMatcher(Path("templates") / "templates_global")
+        detector = StateDetector(matcher, load_pixel_checks("templates_global"))
+        self.assertEqual(detector.detect(frame), GameState.COMBAT_WITHOUT_AUTO)
+
     def test_click_jitter_stays_inside_square(self):
         class SpyBackend:
             name = "spy"

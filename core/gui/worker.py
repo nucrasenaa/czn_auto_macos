@@ -78,7 +78,7 @@ class AutomationWorker(QThread):
         sc.combat = cfg["combat"]
         sc.timing = cfg["timing"]
 
-        tdir = BASE_DIR / "templates" / cfg.get("template_profile", "templates_cn")
+        tdir = BASE_DIR / "templates" / cfg.get("template_profile", "templates_global")
         capturer = ScreenCapturer(method=g.get("capture_method", CaptureMethod.DEFAULT.value))
         serial = get_selected_device()
         if serial:
