@@ -1,4 +1,5 @@
 import logging
+import random
 from typing import List, Tuple
 
 from .base import InputMethod
@@ -18,6 +19,7 @@ class InputSimulator:
         self.method = InputMethod.normalize(backend)
         self.backend = create_backend(self.method)
         self._keep_mouse = False
+        self._click_jitter_radius = 0
 
         hwnd = target_hwnd
         if self.backend.needs_window and not hwnd:
@@ -55,6 +57,36 @@ class InputSimulator:
         if callable(setter):
             setter(serial)
 
+    def set_click_jitter(self, radius: int = 0, enabled: bool = True):
+        """设置点击随机范围。
+
+        ``radius`` 是以点击中心为基准的半边长；例如 ``8`` 表示在
+        ``[x-8, x+8] × [y-8, y+8]`` 的正方形内随机点击。每次调用
+        ``click_at`` 都会重新取样一次。传入 0 或 disabled 会保留原始坐标。
+        """
+        try:
+            radius = int(radius)
+        except (TypeError, ValueError):
+            radius = 0
+        self._click_jitter_radius = max(0, radius) if enabled else 0
+
+    def _randomized_point(self, x: int, y: int,
+                          screen_w: int, screen_h: int) -> Tuple[int, int]:
+        """在屏幕边界内，从以 (x, y) 为中心的正方形取一个点。"""
+        x = int(x)
+        y = int(y)
+        radius = self._click_jitter_radius
+        if radius <= 0:
+            return x, y
+
+        min_x = max(0, x - radius)
+        max_x = min(max(0, int(screen_w) - 1), x + radius)
+        min_y = max(0, y - radius)
+        max_y = min(max(0, int(screen_h) - 1), y + radius)
+        if min_x > max_x or min_y > max_y:
+            return x, y
+        return random.randint(min_x, max_x), random.randint(min_y, max_y)
+
     def _find_window(self) -> int:
         from core.window import resolve_hwnd
 
@@ -69,6 +101,7 @@ class InputSimulator:
     # 对外点击 API（坐标均为目标分辨率下的屏幕像素）
     # ------------------------------------------------------------------
     def click_at(self, x: int, y: int, screen_w: int = 1920, screen_h: int = 1080):
+        x, y = self._randomized_point(x, y, screen_w, screen_h)
         self.backend.click(x, y, screen_w, screen_h)
 
     def move_mouse_abs(self, x: int, y: int, screen_w: int = 1920, screen_h: int = 1080):

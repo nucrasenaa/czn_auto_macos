@@ -95,6 +95,11 @@ class AutomationWorker(QThread):
         matcher = TemplateMatcher(tdir)
         detector = StateDetector(matcher, load_pixel_checks(cfg.get("template_profile")))
         sim = InputSimulator(backend=g.get("input_backend", "postmessage"))
+        jitter_cfg = cfg.get("click_jitter", {})
+        sim.set_click_jitter(
+            jitter_cfg.get("radius", 0),
+            enabled=jitter_cfg.get("enabled", False),
+        )
         sim.keep_mouse = cfg.get("debug", {}).get("keep_mouse", False)
 
         # 坐标变换：点击自动从游戏坐标转屏幕坐标

@@ -8,10 +8,56 @@ import numpy as np
 
 from core.adb import client
 from core.input import create_backend
+from core.input.simulator import InputSimulator
 from core.screencap import CaptureMethod, ScreenCapturer
 
 
 class MacOSAdbPortTests(unittest.TestCase):
+    def test_click_jitter_stays_inside_square(self):
+        class SpyBackend:
+            name = "spy"
+            needs_window = False
+            keep_mouse = False
+
+            def __init__(self):
+                self.points = []
+
+            def click(self, x, y, screen_w=1920, screen_h=1080):
+                self.points.append((x, y))
+
+        spy = SpyBackend()
+        with patch("core.input.simulator.create_backend", return_value=spy):
+            sim = InputSimulator("adb")
+        sim.set_click_jitter(radius=8)
+        for _ in range(100):
+            sim.click_at(500, 400, 1920, 1080)
+
+        self.assertGreater(len(set(spy.points)), 1)
+        for x, y in spy.points:
+            self.assertGreaterEqual(x, 492)
+            self.assertLessEqual(x, 508)
+            self.assertGreaterEqual(y, 392)
+            self.assertLessEqual(y, 408)
+
+    def test_click_jitter_disabled_keeps_exact_point(self):
+        class SpyBackend:
+            name = "spy"
+            needs_window = False
+            keep_mouse = False
+
+            def __init__(self):
+                self.points = []
+
+            def click(self, x, y, screen_w=1920, screen_h=1080):
+                self.points.append((x, y))
+
+        spy = SpyBackend()
+        with patch("core.input.simulator.create_backend", return_value=spy):
+            sim = InputSimulator("adb")
+        sim.set_click_jitter(radius=8, enabled=False)
+        sim.click_at(500, 400, 1920, 1080)
+        self.assertEqual(spy.points, [(500, 400)])
+
     def test_adb_path_honors_environment_override(self):
         with patch.dict(os.environ, {"CZN_ADB_PATH": "/tmp/test-adb"}):
             self.assertEqual(client.adb_path(), "/tmp/test-adb")

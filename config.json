@@ -18,6 +18,10 @@
     "retreat_on_first_floor": true,
     "prevent_lock": true
   },
+  "click_jitter": {
+    "enabled": true,
+    "radius": 8
+  },
   "hotkey": {
     "stop": "f8",
     "pause": "f9"
