@@ -1,0 +1,15 @@
+# macOS + Android emulator (ADB-only)
+PySide6
+PySide6-Fluent-Widgets
+numpy
+opencv-python-headless
+Pillow
+zhconv
+pyinstaller
+
+# macOS Vision.framework bridge, used only by season_reroll OCR
+pyobjc-framework-Quartz
+pyobjc-framework-Vision
+
+# Optional OCR fallback. Omit if only using zero_system mode.
+# paddleocr

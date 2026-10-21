@@ -72,6 +72,30 @@ flowchart LR
 | 分辨率 | 推荐 1920×1080，其他分辨率按比例缩放 |
 | 权限 | **管理员权限**（全局热键需要；否则仅界面按钮可用） |
 
+### macOS + Android 模拟器分支
+
+本分支 `macos-adb` 是 macOS 的 ADB-only 版本：不读取 Windows 窗口、不使用
+DXGI/FramePool/PostMessage，直接通过 `adb exec-out screencap -p` 截图与
+`adb shell input tap` 点击 Android 模拟器。
+
+要求：
+
+1. macOS 12+ 与 Python 3.11+
+2. Android platform-tools（推荐 `brew install android-platform-tools`）
+3. 模拟器已开启 ADB，并且 `adb devices` 显示状态为 `device`
+4. 安装依赖：`pip install -r requirements-macos.txt`
+
+启动：
+
+```bash
+adb devices
+python -m core.gui
+```
+
+若 `adb` 不在 PATH，可设置 `CZN_ADB_PATH=/absolute/path/to/adb`。首次运行在首页
+选择 ADB 设备；截图与点击会自动按设备实际分辨率映射到 1920×1080 基准坐标。
+F6/F8/F9 在应用获得焦点时可用，或直接使用界面按钮。
+
 ---
 
 ## 快速开始

@@ -7,10 +7,10 @@
 - ``printwindow``      : GDI PrintWindow，支持后台/遮挡（部分 D3D 画面可能黑屏）
 """
 import logging
+import os
 from typing import Union
 
 from .base import CaptureMethod, ScreencapBackend, get_window_title
-from .dxgi import DXGIBackend
 
 __all__ = [
     "ScreencapBackend",
@@ -21,18 +21,25 @@ __all__ = [
     "ScreenCapturer",
 ]
 
-# 供 GUI 下拉框使用：内部值 -> 显示名
-AVAILABLE_METHODS = {
-    CaptureMethod.FRAMEPOOL.value: "FramePool (后台/遮挡可截, 默认)",
-    CaptureMethod.PRINTWINDOW.value: "PrintWindow (后台/遮挡可截)",
-    CaptureMethod.AUTO.value: "自动 (DXGI 前台)",
-    CaptureMethod.ADB.value: "ADB (安卓设备截屏)",
-}
+# 供 GUI 下拉框使用：内部值 -> 显示名。macOS 分支只暴露 ADB，避免误选 Win32 后端。
+if os.name == "nt":
+    AVAILABLE_METHODS = {
+        CaptureMethod.FRAMEPOOL.value: "FramePool (后台/遮挡可截, 默认)",
+        CaptureMethod.PRINTWINDOW.value: "PrintWindow (后台/遮挡可截)",
+        CaptureMethod.AUTO.value: "自动 (DXGI 前台)",
+        CaptureMethod.ADB.value: "ADB (安卓设备截屏)",
+    }
+else:
+    AVAILABLE_METHODS = {CaptureMethod.ADB.value: "ADB (安卓设备截屏)"}
 
 
 def create_backend(method: "Union[str, CaptureMethod, None]") -> ScreencapBackend:
-    """根据方式名创建捕获后端，失败时回退到 DXGI。"""
+    """根据方式名创建捕获后端；macOS 分支固定使用 ADB。"""
     method = CaptureMethod.normalize(method)
+
+    if os.name != "nt" and method != CaptureMethod.ADB.value:
+        logging.warning("macOS ADB-only 模式：捕获方式已切换为 adb")
+        method = CaptureMethod.ADB.value
 
     if method == CaptureMethod.ADB.value:
         from .adb import AdbScreencapBackend
@@ -55,6 +62,7 @@ def create_backend(method: "Union[str, CaptureMethod, None]") -> ScreencapBacken
             return DXGIBackend()
 
     # auto / dxgi / 其它
+    from .dxgi import DXGIBackend
     return DXGIBackend()
 
 

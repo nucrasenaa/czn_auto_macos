@@ -1,10 +1,11 @@
 import ctypes
+import os
 from abc import ABC, abstractmethod
 from ctypes import wintypes
 from enum import Enum
 from typing import Optional, Tuple, Union
 
-user32 = ctypes.windll.user32
+user32 = ctypes.windll.user32 if os.name == "nt" else None
 
 # Win32 鼠标消息
 WM_MOUSEMOVE = 0x0200
@@ -72,7 +73,7 @@ class InputMethod(str, Enum):
 
 def find_window_by_title(title: str) -> int:
     """按窗口标题精确查找顶层窗口句柄，未找到返回 0。"""
-    if not title:
+    if not title or user32 is None:
         return 0
     return user32.FindWindowW(None, title) or 0
 
@@ -83,7 +84,7 @@ def screen_to_client(hwnd: int, x: int, y: int) -> Tuple[int, int]:
     窗口消息（WM_LBUTTONDOWN 等）的 ``lParam`` 必须是客户区坐标；直接塞屏幕
     坐标会在窗口非全屏 / 带标题栏边框时产生偏移。失败时原样返回。
     """
-    if not hwnd:
+    if not hwnd or user32 is None:
         return x, y
     pt = wintypes.POINT(x, y)
     if user32.ScreenToClient(hwnd, ctypes.byref(pt)):

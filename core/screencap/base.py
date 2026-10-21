@@ -1,4 +1,5 @@
 import ctypes
+import os
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Union
@@ -15,17 +16,17 @@ class CaptureMethod(str, Enum):
     PRINTWINDOW = "printwindow"  # GDI PrintWindow，支持后台/遮挡
     ADB = "adb"              # 安卓设备：经 adb exec-out screencap 截屏
 
-    DEFAULT = "framepool"    # 别名：默认方式（值与 FRAMEPOOL 相同）
+    DEFAULT = "framepool" if os.name == "nt" else "adb"
 
     @classmethod
     def normalize(cls, value: "Union[str, CaptureMethod, None]") -> str:
         """把任意输入规整为合法的方式字符串，None/空 取默认值。"""
         if value is None:
-            return cls.FRAMEPOOL.value
+            return cls.DEFAULT.value
         if isinstance(value, cls):
             return value.value
         text = str(value).strip().lower()
-        return text or cls.FRAMEPOOL.value
+        return text or cls.DEFAULT.value
 
 
 def get_window_title(hwnd: int) -> str:

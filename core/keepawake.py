@@ -10,6 +10,8 @@
 """
 import ctypes
 import logging
+import os
+import subprocess
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
@@ -22,7 +24,6 @@ try:
 except (AttributeError, OSError):  # 非 Windows / 无 kernel32
     _set_state = None
 
-
 class KeepAwake:
     """运行时防锁屏开关。
 
@@ -33,6 +34,7 @@ class KeepAwake:
     def __init__(self, keep_display: bool = True):
         self.keep_display = keep_display
         self._active = False
+        self._caffeinate = None
 
     @property
     def active(self) -> bool:
@@ -41,8 +43,23 @@ class KeepAwake:
     def enable(self) -> bool:
         if self._active:
             return True
+        if _set_state is None and os.name != "posix":
+            logging.warning("防锁屏不可用（缺少系统电源 API）")
+            return False
+        if _set_state is None and os.uname().sysname == "Darwin":
+            try:
+                self._caffeinate = subprocess.Popen(
+                    ["caffeinate", "-dimsu"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self._active = True
+                logging.info("已启用 macOS caffeinate 防休眠")
+                return True
+            except (FileNotFoundError, OSError) as e:
+                logging.warning(f"macOS 防休眠不可用: {e}")
+                return False
         if _set_state is None:
-            logging.warning("防锁屏不可用（非 Windows 或缺少 kernel32）")
             return False
         flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED
         if self.keep_display:
@@ -55,7 +72,20 @@ class KeepAwake:
         return True
 
     def disable(self) -> None:
-        if not self._active or _set_state is None:
+        if not self._active:
+            self._active = False
+            return
+        if self._caffeinate is not None:
+            self._caffeinate.terminate()
+            try:
+                self._caffeinate.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self._caffeinate.kill()
+            self._caffeinate = None
+            self._active = False
+            logging.info("已关闭 macOS caffeinate 防休眠")
+            return
+        if _set_state is None:
             self._active = False
             return
         _set_state(ES_CONTINUOUS)

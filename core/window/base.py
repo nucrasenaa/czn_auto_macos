@@ -7,12 +7,13 @@
 方便后续接入模拟器（雷电/MuMu 等各自一个 provider），见 ``core/window/__init__.py``。
 """
 import ctypes
+import os
 from abc import ABC, abstractmethod
 from ctypes import wintypes
 from dataclasses import dataclass
 from typing import List, Tuple
 
-user32 = ctypes.windll.user32
+user32 = ctypes.windll.user32 if os.name == "nt" else None
 
 
 @dataclass(frozen=True)
@@ -39,12 +40,15 @@ class WindowTarget:
 
 
 # WNDENUMPROC 回调签名：BOOL CALLBACK(HWND, LPARAM)
-_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_WNDENUMPROC = (
+    ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    if os.name == "nt" else None
+)
 
 
 def get_window_title(hwnd: int) -> str:
     """读取窗口标题文本，失败返回空串。"""
-    if not hwnd:
+    if not hwnd or user32 is None:
         return ""
     try:
         length = user32.GetWindowTextLengthW(hwnd)
@@ -58,6 +62,8 @@ def get_window_title(hwnd: int) -> str:
 def enum_top_windows() -> List[Tuple[int, str]]:
     """枚举所有「可见且有标题」的顶层窗口，返回 ``[(hwnd, title), ...]``。"""
     results: List[Tuple[int, str]] = []
+    if user32 is None or _WNDENUMPROC is None:
+        return results
 
     def _cb(hwnd, _lparam):
         if not user32.IsWindowVisible(hwnd):
@@ -76,7 +82,7 @@ def enum_top_windows() -> List[Tuple[int, str]]:
 
 def find_window_by_title(title: str) -> int:
     """按窗口标题精确查找顶层窗口句柄，未找到返回 0（兜底用）。"""
-    if not title:
+    if not title or user32 is None:
         return 0
     return user32.FindWindowW(None, title) or 0
 

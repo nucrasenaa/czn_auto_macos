@@ -5,6 +5,7 @@
 纯 Qt 控件 + 扁平分组卡片，所有字段直接读写 ConfigManager。
 """
 import logging
+import os
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -129,9 +130,10 @@ class SettingsPage(QScrollArea):
         g = d.get("game", {})
         sec = _Section("平台与运行")
 
+        mode_default = "pc" if os.name == "nt" else "emulator"
         self.mode_combo = _combo(
             list(MODE_DISPLAY.values()),
-            MODE_DISPLAY.get(g.get("mode", "pc"), "PC端/云游戏"),
+            MODE_DISPLAY.get(g.get("mode", mode_default), next(iter(MODE_DISPLAY.values()))),
         )
         sec.add("运行平台", self.mode_combo)
 
@@ -277,9 +279,13 @@ class SettingsPage(QScrollArea):
         )
         sec.add("Buff OCR 关键词", self.ocr_buff_keyword)
 
+        ocr_backends = ["windows", "paddle"] if os.name == "nt" else ["macos", "paddle"]
+        ocr_default = "windows" if os.name == "nt" else "macos"
         self.ocr_backend = _combo(
-            ["windows", "paddle"], ocr.get("backend", "windows"),
-            tip="windows = 系统自带 OCR(快)\npaddle = PaddleOCR 离线(更准)",
+            ocr_backends, ocr.get("backend", ocr_default),
+            tip=("windows = 系统自带 OCR(快)\npaddle = PaddleOCR 离线(更准)"
+                 if os.name == "nt" else
+                 "macos = Vision 系统 OCR\npaddle = PaddleOCR 离线(更准)"),
         )
         sec.add("OCR 后端", self.ocr_backend)
 
@@ -326,8 +332,10 @@ class SettingsPage(QScrollArea):
         d = self.cfg.data
         g = d.setdefault("game", {})
 
-        g["mode"] = self._reverse(MODE_DISPLAY, self.mode_combo.currentText(), "pc")
-        g["input_backend"] = self._reverse(INPUT_BACKEND_DISPLAY, self.input_combo.currentText(), "postmessage")
+        mode_default = "pc" if os.name == "nt" else "emulator"
+        input_default = "postmessage" if os.name == "nt" else "adb"
+        g["mode"] = self._reverse(MODE_DISPLAY, self.mode_combo.currentText(), mode_default)
+        g["input_backend"] = self._reverse(INPUT_BACKEND_DISPLAY, self.input_combo.currentText(), input_default)
         g["capture_method"] = self._reverse(AVAILABLE_METHODS, self.capture_combo.currentText(),
                                             CaptureMethod.DEFAULT.value)
         g["retreat_on_first_floor"] = self.sw_retreat.isChecked()

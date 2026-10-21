@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 """主窗口：Fluent 导航 + 运行页/设置页，统筹工作线程、日志、热键。"""
 import logging
+import os
 
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from qfluentwidgets import FluentIcon, FluentWindow, InfoBar, InfoBarPosition
 
 from .config_manager import ConfigManager
@@ -65,6 +66,18 @@ class MainWindow(FluentWindow):
         self._hk.start.connect(self.start_run)
         self._hk.stop.connect(self.stop_run)
         self._hk.pause.connect(self.toggle_pause)
+        self._shortcuts = []
+        if os.name != "nt":
+            # keyboard 库的 Win32 全局 hook 不适用于 macOS。Qt shortcuts
+            # 保证 F6/F8/F9 在应用获得焦点时可用；ADB 本身不需要全局鼠标权限。
+            for key, signal in (("F6", self._hk.start), ("F8", self._hk.stop),
+                                ("F9", self._hk.pause)):
+                shortcut = QShortcut(QKeySequence(key), self)
+                shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+                shortcut.activated.connect(signal.emit)
+                self._shortcuts.append(shortcut)
+            logging.info("macOS 快捷键已注册 F6=开始 F8=停止 F9=暂停（应用获得焦点时）")
+            return
         try:
             import keyboard as kb
             kb.add_hotkey("f6", lambda: self._hk.start.emit(), suppress=True)

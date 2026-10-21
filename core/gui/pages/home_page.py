@@ -3,6 +3,7 @@
 """运行页：开始/暂停/停止控制、快速切换、实时统计卡片、彩色日志面板（扁平风）。"""
 import html
 import logging
+import os
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -233,7 +234,12 @@ class HomePage(QWidget):
                 sel_index = self.cb_window.count() - 1
 
         if not targets:
-            self.cb_window.addItem("未找到游戏窗口，请先启动游戏后点刷新", None)
+            empty_text = (
+                "未找到 ADB 设备，请启动模拟器并确认 adb devices 可见"
+                if os.name != "nt" else
+                "未找到游戏窗口，请先启动游戏后点刷新"
+            )
+            self.cb_window.addItem(empty_text, None)
             sel_index = 0
         elif sel_index < 0:
             sel_index = 0
@@ -261,7 +267,10 @@ class HomePage(QWidget):
         变更写入 config 并保存，发 ``methodsChanged`` 让设置页刷新下拉。
         """
         g = self.cfg.data.setdefault("game", {})
-        is_adb = target is not None and getattr(target, "provider_key", "") == "adb"
+        # macOS 分支是 ADB-only：即使设备暂时离线，也不要把配置恢复成 Win32 后端。
+        is_adb = os.name != "nt" or (
+            target is not None and getattr(target, "provider_key", "") == "adb"
+        )
         changed = False
 
         if is_adb:

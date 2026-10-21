@@ -17,6 +17,7 @@
 新增模拟器：新建 ``core/window/<brand>.py`` 继承 :class:`WindowProvider` 实现
 ``discover()``，然后在下方 ``_PROVIDERS`` 注册即可。
 """
+import os
 from typing import List, Optional
 
 from .base import (
@@ -48,10 +49,9 @@ __all__ = [
 ]
 
 # 注册表：顺序即优先级（首页下拉展示顺序、兜底优先级）
-_PROVIDERS: List[WindowProvider] = [
-    GameWindowProvider(),
-    AdbDeviceProvider(),
-]
+_PROVIDERS: List[WindowProvider] = [AdbDeviceProvider()]
+if os.name == "nt":
+    _PROVIDERS.insert(0, GameWindowProvider())
 
 # 进程全局选中窗口（不持久化，退出即失效）
 _selected: Optional[WindowTarget] = None

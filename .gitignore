@@ -19,9 +19,11 @@ build/
 *.zip
 # 打包配置需纳入版本控制
 !packaging/czn_auto.spec
+!packaging/czn_auto_macos.spec
 
 # 临时文件
 tmp/
+.codebase-memory/
 *.bak
 *.recovered
 *.recovered2

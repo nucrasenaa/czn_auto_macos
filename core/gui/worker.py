@@ -5,6 +5,7 @@
 通过 Qt 信号把统计数据回传主线程，UI 不直接被工作线程触碰。
 """
 import logging
+import os
 import threading
 import time
 
@@ -599,7 +600,8 @@ class AutomationWorker(QThread):
         ocr_cfg = cfg.get("ocr", {})
         if ocr_state.ocr is None:
             from core.ocr import OcrReader
-            ocr_state.ocr = OcrReader("zh-cn", ocr_cfg.get("backend", "windows"))
+            default_ocr = "windows" if os.name == "nt" else "macos"
+            ocr_state.ocr = OcrReader("zh-cn", ocr_cfg.get("backend", default_ocr))
         ocr = ocr_state.ocr
 
         is_global = cfg.get("template_profile") == "templates_global"

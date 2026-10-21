@@ -11,9 +11,9 @@
       1920,
       1080
     ],
-    "capture_method": "framepool",
-    "input_backend": "postmessage",
-    "mode": "pc",
+    "capture_method": "adb",
+    "input_backend": "adb",
+    "mode": "emulator",
     "mission": "zero_system",
     "retreat_on_first_floor": true,
     "prevent_lock": true
@@ -226,7 +226,7 @@
       800,
       300
     ],
-    "backend": "windows",
+    "backend": "macos",
     "buff_ocr_keyword": "在3場一般戰鬥期間怪物的HP變更為1"
   },
   "logging": {

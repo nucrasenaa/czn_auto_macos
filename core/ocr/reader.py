@@ -7,6 +7,7 @@
 向后兼容历史 ``ocr.OcrReader`` 的所有调用方。
 """
 import logging
+import os
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -18,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class OcrReader:
-    def __init__(self, lang: str = "zh-cn", backend: str = "windows"):
+    def __init__(self, lang: str = "zh-cn", backend: str | None = None):
         self._lang = lang
-        self._backend_name = backend
-        self._impl = create_backend(backend, lang)
+        self._backend_name = backend or ("windows" if os.name == "nt" else "macos")
+        self._impl = create_backend(self._backend_name, lang)
 
     def scan(self, frame: np.ndarray, region: Optional[list] = None) -> List[TextBox]:
         return self._impl.scan(frame, region)

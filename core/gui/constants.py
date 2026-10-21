@@ -31,13 +31,17 @@ PROFILE_TO_SERVER = {v: k for k, v in SERVER_TO_PROFILE.items()}
 
 # 运行模式
 MISSION_DISPLAY = {"zero_system": "零式系统", "season_reroll": "赛季图初始刷取"}
-MODE_DISPLAY = {"pc": "PC端/云游戏", "emulator": "模拟器"}
-INPUT_BACKEND_DISPLAY = {
-    "sendinput": "SendInput (前台)",
-    "sendmessage": "SendMessage (后台)",
-    "postmessage": "PostMessage (后台推荐)",
-    "adb": "ADB (安卓设备)",
-}
+if sys.platform == "win32":
+    MODE_DISPLAY = {"pc": "PC端/云游戏", "emulator": "模拟器"}
+    INPUT_BACKEND_DISPLAY = {
+        "sendinput": "SendInput (前台)",
+        "sendmessage": "SendMessage (后台)",
+        "postmessage": "PostMessage (后台推荐)",
+        "adb": "ADB (安卓设备)",
+    }
+else:
+    MODE_DISPLAY = {"emulator": "Android 模拟器"}
+    INPUT_BACKEND_DISPLAY = {"adb": "ADB (安卓设备)"}
 
 # 房间路线优先级显示名
 ROOM_NAMES = {
