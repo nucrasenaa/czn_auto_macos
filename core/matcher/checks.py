@@ -74,6 +74,7 @@ STATE_CHECKS: List[Tuple[str, GameState]] = [
     ("codex_confirm", GameState.CODEX_CONFIRM),
     ("zero_system_entry", GameState.ZERO_SYSTEM_ENTRY),
     ("main_menu", GameState.MAIN_MENU),
+    ("main_menu_en", GameState.MAIN_MENU),
     ("chaos_center", GameState.CHAOS_CENTER),
     ("remove_card_event", GameState.REMOVE_CARD_EVENT),
     ("continue_forward", GameState.CONTINUE_FORWARD),

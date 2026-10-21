@@ -100,6 +100,9 @@ F6/F8/F9 在应用获得焦点时可用，或直接使用界面按钮。
 半边长（默认 8 像素），每次点击都会在该区域内重新取样。可在 `config.json`
 中将 `click_jitter.enabled` 设为 `false` 或将 `radius` 设为 `0` 关闭。
 
+英文/Global 游戏界面使用 `"template_profile": "templates_global"`；当前分支也
+包含英文主菜单模板 `templates_global/main_menu_en.png`。
+
 ---
 
 ## 快速开始
